@@ -1,0 +1,61 @@
+name: UPDATE Metablocks TEST data
+on:
+  workflow_run:
+    workflows: ["UPDATE Metablocks DEVELOP data"]
+    types:
+      - completed
+jobs:
+  release:
+    name: Update
+    runs-on: ubuntu-18.04
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
+    steps:
+      - name: Checkout the crank repository
+        uses: actions/checkout@v2
+        with:
+          repository: metablockshq/crank
+          token: ${{ secrets.ACCESS_TOKEN }}
+          ref: test
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v2.5.1
+        with:
+          node-version: 12
+
+      - name: Install dependencies
+        run: npm ci
+        working-directory: universe-indexer
+
+      - name: Run the crank
+        run: npm run generate-universe
+        working-directory: universe-indexer
+
+      - name: Checkout the universe-index.metablocks.world repository inside the crank repository
+        uses: actions/checkout@v2
+        with:
+          path: output
+          repository: metablockshq/universe-index.metablocks.world
+
+      - name: Copy universe.json to output directory
+        uses: canastro/copy-file-action@master
+        with:
+          source: "./universe-indexer/universe.json"
+          target: "./output/universe.testnet.json"
+
+      - name: Copy last.crawled.json to output directory
+        uses: canastro/copy-file-action@master
+        with:
+          source: "./universe-indexer/last.crawled.json"
+          target: "./output/last.crawled.testnet.json"
+
+      - name: Push to universe-index.metablocks.world repository
+        uses: cpina/github-action-push-to-another-repository@main
+        env:
+          API_TOKEN_GITHUB: ${{ secrets.ACCESS_TOKEN }}
+        with:
+          source-directory: "output"
+          destination-github-username: "metablockshq"
+          destination-repository-name: "universe-index.metablocks.world"
+          user-email: no-reply@github.com
+          commit-message: Automatic JSON Addition Commit
+          target-branch: "main"
